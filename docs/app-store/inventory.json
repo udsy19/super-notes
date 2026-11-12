@@ -2,7 +2,7 @@
   "app": "Super Notes",
   "repo": "udsy19/super-notes",
   "branch": "release/macos-app-store",
-  "commit": "8c596bd",
+  "commit": "35c958f",
   "bundleIds": {
     "direct": "com.udsy.supernotes",
     "appstore": "com.udsy.supernotes.appstore"
@@ -114,7 +114,7 @@
       "name": "On-device AI (llama.cpp + Qwen3.5 2B)",
       "classification": "compatible-with-config",
       "storeStatus": "included; download on consent",
-      "evidence": "probe model.download/sha256/inference PASS in sandbox (::ask -> 4)"
+      "evidence": "probe model.download/sha256/inference PASS in sandbox (::ask -> 4); self-tests: Download Now in Low Power Mode, tampered imported GGUF rejected"
     },
     {
       "name": "Apple on-device model (macOS 26)",
@@ -138,7 +138,7 @@
       "name": "Import from direct edition",
       "classification": "compatible-with-config",
       "storeStatus": "included (copy, non-destructive)",
-      "evidence": "self-test StorageKit.directEditionImport; probe import.fixture PASS; panel needs human"
+      "evidence": "self-test StorageKit.directEditionImport (links, torn copy, GitHub extensions skipped, model as .partial); probe import.fixture PASS; panel needs human"
     }
   ],
   "dependencies": [
