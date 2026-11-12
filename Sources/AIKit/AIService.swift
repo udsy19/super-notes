@@ -56,6 +56,7 @@ public final class AIService: ObservableObject, AIServicing {
     public func start() {
         guard !started else { return }
         started = true
+        downloader.adoptImported()
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstDownloadDelay) {
             MainActor.assumeIsolated { AIService.shared.downloadIfWanted() }
         }
@@ -139,6 +140,9 @@ public final class AIService: ObservableObject, AIServicing {
     // MARK: - AIServicing
 
     public var readinessChanges: AnyPublisher<AIReadiness, Never> { readinessSubject.eraseToAnyPublisher() }
+
+    public var modelFileName: String? { downloader.spec.fileName }
+    public func adoptImportedModel() { downloader.adoptImported() }
 
     public func noteUsed() {
         guard engine == .onDevice, !downloader.isInstalled, Defaults[.aiAutoDownload] else { return }
@@ -225,7 +229,7 @@ public final class AIService: ObservableObject, AIServicing {
                                      + "and checked against its SHA-256 before use. It stays on this Mac; you can remove it in Settings → AI.",
                                  confirmTitle: "Download \(spec.sizeText)") else { return }
         }
-        downloader.retryNow()
+        downloader.retryNow(userRequested: true)
         refreshReadiness()
     }
 

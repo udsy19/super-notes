@@ -271,6 +271,15 @@ public protocol AIServicing: AnyObject {
                   completion: @escaping @Sendable (Result<String, AIError>) -> Void) -> AIGeneration
     /// Settings → AI.
     func makeSettingsView() -> NSView
+    /// The on-device model's file name in `SuperNotesPaths.models` (nil: no downloadable model).
+    var modelFileName: String? { get }
+    /// Checks a model copy placed as `<modelFileName>.partial` (import) and installs it only if its SHA-256 matches.
+    func adoptImportedModel()
+}
+
+public extension AIServicing {
+    var modelFileName: String? { nil }
+    func adoptImportedModel() {}
 }
 
 // MARK: - Other services

@@ -224,6 +224,37 @@ private func downloadManagerTests() {
     else { check(false, "size mismatch fails: \(o.state)") }
     o.stop()
 
+    // Download Now is the user's consent: Low Power Mode and a metered network don't hold it; a short disk still does.
+    let asked = ModelDownloader(spec: spec, folder: scratch("asked"), configuration: config, conditions: { current })
+    current = DownloadConditions(networkOK: false, lowPowerMode: true, freeDiskBytes: 50_000_000_000)
+    asked.start()
+    check(asked.state == .waiting(.lowPower), "automatic download waits in Low Power Mode: \(asked.state)")
+    asked.stop()
+    asked.retryNow(userRequested: true)
+    pump(until: { asked.state == .installed })
+    check(asked.state == .installed, "Download Now runs in Low Power Mode on a metered network: \(asked.state)")
+    asked.remove()
+    current = DownloadConditions(networkOK: false, lowPowerMode: true, freeDiskBytes: 1_000)
+    asked.retryNow(userRequested: true)
+    check(asked.state == .waiting(.disk), "Download Now still waits for disk space: \(asked.state)")
+    asked.stop()
+    current = DownloadConditions(networkOK: true, lowPowerMode: false, freeDiskBytes: 50_000_000_000)
+
+    // A model copied in by Import (as `.partial`) is installed only when its SHA-256 matches; a tampered one is deleted.
+    let imported = ModelDownloader(spec: spec, folder: scratch("imported"), configuration: config, conditions: { current })
+    var tampered = payload; tampered[0] ^= 0xFF
+    try? FileManager.default.createDirectory(at: imported.folder, withIntermediateDirectories: true)
+    try? tampered.write(to: imported.partialURL)
+    FakeModelServer.ranges = []
+    imported.adoptImported()
+    pump(until: { imported.state == .notInstalled && !FileManager.default.fileExists(atPath: imported.partialURL.path) })
+    check(imported.state == .notInstalled && !imported.isInstalled && !FileManager.default.fileExists(atPath: imported.partialURL.path),
+          "a tampered imported GGUF is rejected and deleted: \(imported.state)")
+    try? payload.write(to: imported.partialURL)
+    imported.adoptImported()
+    pump(until: { imported.state == .installed })
+    check(imported.isInstalled && FakeModelServer.ranges.isEmpty, "a matching imported GGUF is installed without the network")
+
     // "Getting ready… 40%" from the state.
     check(ModelDownloader.State.downloading(received: 40, total: 100).preparingText == "Getting ready… 40%", "progress pill")
     check(ModelDownloader.State.installed.preparingText == nil, "no pill when installed")
