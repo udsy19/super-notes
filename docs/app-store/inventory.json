@@ -1,0 +1,163 @@
+{
+  "app": "Super Notes",
+  "repo": "udsy19/super-notes",
+  "branch": "release/macos-app-store",
+  "commit": "8c596bd",
+  "bundleIds": {
+    "direct": "com.udsy.supernotes",
+    "appstore": "com.udsy.supernotes.appstore"
+  },
+  "features": [
+    {
+      "name": "Notes editor, scratchpad, history/undo, The Void, backups",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "probe notes.sqlite PASS in container; self-tests"
+    },
+    {
+      "name": "Checklists / lists",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "self-tests (EditorKit, NoteEngine)"
+    },
+    {
+      "name": "Math, units, sum/avg/count",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "self-tests (NoteEngine)"
+    },
+    {
+      "name": "Currency rates fetch",
+      "classification": "compatible-with-config",
+      "storeStatus": "included (network.client)",
+      "evidence": "probe network.client PASS HTTP 200"
+    },
+    {
+      "name": "Timers & pomodoro notifications",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "probe notifications.settings PASS; delivery needs human"
+    },
+    {
+      "name": "Search",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "self-tests (ToolsKit.search)"
+    },
+    {
+      "name": "Export to files / PDF / print / Obsidian / Bear / custom URL",
+      "classification": "compatible-with-config",
+      "storeStatus": "included (user-selected.read-write)",
+      "evidence": "save panels need human run"
+    },
+    {
+      "name": "Export to Apple Notes",
+      "classification": "compatible-after-architecture-change",
+      "storeStatus": "included via Notes share extension (no Apple Events)",
+      "evidence": "probe export.appleNotesShare PASS canPerform; sheet needs human"
+    },
+    {
+      "name": "JSON import/export",
+      "classification": "compatible-with-config",
+      "storeStatus": "included",
+      "evidence": "panels need human run"
+    },
+    {
+      "name": "Encrypted iCloud Drive sync",
+      "classification": "compatible-after-architecture-change",
+      "storeStatus": "included; user picks folder (security-scoped bookmark)",
+      "evidence": "probe icloud-drive.noPick shows path access denied; picked-folder flow needs human run"
+    },
+    {
+      "name": "Encryption key in Keychain",
+      "classification": "compatible-with-config",
+      "storeStatus": "included; data-protection keychain needs provisioning profile",
+      "evidence": "probe keychain.generic PASS; keychain.dataProtection -34018 ad-hoc (expected)"
+    },
+    {
+      "name": "Locked notes (Touch ID)",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "LocalAuthentication, no entitlement; needs human"
+    },
+    {
+      "name": "Global hotkey",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "probe hotkey.register PASS"
+    },
+    {
+      "name": "Launch at login",
+      "classification": "compatible",
+      "storeStatus": "included (SMAppService, opt-in)",
+      "evidence": "probe loginItem.status; register needs human"
+    },
+    {
+      "name": "Bundled JS extensions (JavaScriptCore)",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "probe extension.bundled PASS"
+    },
+    {
+      "name": "User-authored local extensions",
+      "classification": "compatible-with-config",
+      "storeStatus": "included; review risk (2.5.2)",
+      "evidence": "probe extension.userAuthored PASS"
+    },
+    {
+      "name": "Install/update extensions from GitHub",
+      "classification": "incompatible-confirmed",
+      "storeStatus": "compiled out of Store (2.5.2); direct only",
+      "evidence": "Community.swift #if !APP_STORE"
+    },
+    {
+      "name": "On-device AI (llama.cpp + Qwen3.5 2B)",
+      "classification": "compatible-with-config",
+      "storeStatus": "included; download on consent",
+      "evidence": "probe model.download/sha256/inference PASS in sandbox (::ask -> 4)"
+    },
+    {
+      "name": "Apple on-device model (macOS 26)",
+      "classification": "compatible",
+      "storeStatus": "included",
+      "evidence": "FoundationModels, no entitlement; not exercised (Apple Intelligence state)"
+    },
+    {
+      "name": "Command-line AI tools (codex/claude/gemini)",
+      "classification": "incompatible-confirmed",
+      "storeStatus": "compiled out of Store; direct only",
+      "evidence": "sandboxed child cannot run outside tools with their credentials"
+    },
+    {
+      "name": "Self-updater (GitHub Releases)",
+      "classification": "incompatible-confirmed",
+      "storeStatus": "not compiled/linked in Store (2.4.5(vii))",
+      "evidence": "Package.swift drops UpdateKit"
+    },
+    {
+      "name": "Import from direct edition",
+      "classification": "compatible-with-config",
+      "storeStatus": "included (copy, non-destructive)",
+      "evidence": "self-test StorageKit.directEditionImport; probe import.fixture PASS; panel needs human"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "llama.cpp xcframework",
+      "version": "b11721",
+      "license": "MIT",
+      "kind": "dynamic framework (SwiftPM binary target)",
+      "bundled": true,
+      "sandboxOK": true
+    },
+    {
+      "name": "Qwen3.5-2B-Q4_K_M.gguf",
+      "version": "HF commit f6d5376be1edb4d416d56da11e5397a961aca8ae",
+      "license": "Apache-2.0",
+      "kind": "model weights (downloaded data, 1,280,835,840 bytes, SHA-256 pinned)",
+      "bundled": false,
+      "sandboxOK": true
+    }
+  ],
+  "status": "CODE COMPLETE / CREDENTIALS REQUIRED"
+}
