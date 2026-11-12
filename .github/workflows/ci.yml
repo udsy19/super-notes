@@ -17,3 +17,7 @@ jobs:
         run: swift build
       - name: Self-tests
         run: .build/debug/SuperNotesSelfTest
+      - name: Build (Mac App Store edition)
+        run: SUPERNOTES_DISTRIBUTION=appstore swift build --scratch-path .build-appstore
+      - name: Self-tests (Mac App Store edition)
+        run: .build-appstore/debug/SuperNotesSelfTest

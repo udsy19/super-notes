@@ -198,6 +198,14 @@ public final class AIService: ObservableObject, AIServicing {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleUnloadDelay, execute: work)
     }
 
+    /// Frees the model before the process exits: ggml's Metal device asserts in its static destructor while a model's
+    /// buffers are still allocated, which turned a quit within ten minutes of an AI command into a crash.
+    public func unloadBeforeQuit() {
+        unloadWork?.cancel()
+        llama?.unload()
+        llama = nil
+    }
+
     /// Removes the downloaded model (and unloads it).
     public func removeModel() {
         let engine = llama

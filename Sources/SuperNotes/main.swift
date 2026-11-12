@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 let app = NSApplication.shared
+#if DEBUG
+if CommandLine.arguments.contains("--sandbox-probe") {
+    MainActor.assumeIsolated { SandboxProbe.run(withModel: CommandLine.arguments.contains("--with-model")) }
+}
+#endif
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
 app.run()

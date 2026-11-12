@@ -10,5 +10,9 @@ public enum AIKitModule {
                                                queue: .main) { _ in
             MainActor.assumeIsolated { AIService.shared.start() }
         }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
+                                               queue: .main) { _ in
+            MainActor.assumeIsolated { AIService.shared.unloadBeforeQuit() }
+        }
     }
 }
