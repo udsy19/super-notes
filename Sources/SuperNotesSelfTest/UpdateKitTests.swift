@@ -1,3 +1,4 @@
+#if !APP_STORE
 import Foundation
 import CryptoKit
 import Security
@@ -286,3 +287,4 @@ private func endToEndUpdate() {
     let lines = (try? String(contentsOf: log, encoding: .utf8))?.split(separator: "\n") ?? []
     for line in lines { print("  helper: \(line.replacingOccurrences(of: work.path, with: "<tmp>"))") }
 }
+#endif

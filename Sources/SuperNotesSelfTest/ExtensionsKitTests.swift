@@ -146,6 +146,7 @@ func registerExtensionsKitTests() {
         check(ExtensionStore.grants(key).isEmpty, "grant removed")
     }))
 
+    #if !APP_STORE
     SelfTest.cases.append(("ExtensionsKit.github", {
         let a = try? GitHubSource("https://github.com/owner/repo")
         check(a?.rawURL("extension.json").absoluteString == "https://raw.githubusercontent.com/owner/repo/HEAD/extension.json", "default branch raw URL")
@@ -170,6 +171,7 @@ func registerExtensionsKitTests() {
             check(message?.contains("turned off") == true, "install refused while GitHub access is off")
         }
     }))
+    #endif
 
     SelfTest.cases.append(("ExtensionsKit.bundledCommands",{ MainActor.assumeIsolated { bundledCommandTests() } }))
     SelfTest.cases.append(("ExtensionsKit.loading", { MainActor.assumeIsolated { loadingTests() } }))

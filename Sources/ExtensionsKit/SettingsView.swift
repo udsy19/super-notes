@@ -90,6 +90,13 @@ private struct ExtensionsTab: View {
                 }
                 .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             }
+            #if APP_STORE
+            Text("This edition runs the bundled extensions and extensions you write yourself: put a folder with "
+                 + "extension.json and its scripts in the Extensions folder (Open Folder), then Reload. Super Notes "
+                 + "doesn't download extensions.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
+            #else
             HStack {
                 TextField("https://github.com/owner/repo", text: $repoURL).textFieldStyle(.roundedBorder)
                 Button("Install from GitHub") { install() }.disabled(repoURL.isEmpty || busy || !allowUpdates)
@@ -97,9 +104,11 @@ private struct ExtensionsTab: View {
             }
             Text(allowUpdates ? status : "Checking GitHub for extensions is turned off in Privacy settings.")
                 .font(.caption).foregroundStyle(.secondary)
+            #endif
         }
     }
 
+    #if !APP_STORE
     private func install() {
         busy = true; status = "Installing…"
         Task {
@@ -121,6 +130,7 @@ private struct ExtensionsTab: View {
             busy = false
         }
     }
+    #endif
 }
 
 private struct FailureDetail: View {
@@ -216,6 +226,7 @@ private struct ExtensionDetail: View {
                 }
 
                 HStack {
+                    #if !APP_STORE
                     if let newerVersion {
                         Button("Update to \(newerVersion)") {
                             Task {
@@ -224,6 +235,7 @@ private struct ExtensionDetail: View {
                             }
                         }
                     }
+                    #endif
                     if let source = Defaults[.extensionsSources][ext.manifest.name], let url = URL(string: source) {
                         Button("Open GitHub Repo") { NSWorkspace.shared.open(url) }
                     }

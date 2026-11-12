@@ -6,7 +6,9 @@ import ExtensionsKit
 import EditorKit
 import ShellKit
 import ToolsKit
-import UpdateKit
+#if !APP_STORE
+import UpdateKit   // the Mac App Store edition gets updates from the App Store; UpdateKit isn't even linked
+#endif
 import AIKit
 
 @MainActor
@@ -20,7 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AIKitModule.install()
         EditorKitModule.install()
         ToolsKitModule.install()
+        #if !APP_STORE
         UpdateKitModule.install()
+        #endif
         ShellKitModule.install()
     }
 }

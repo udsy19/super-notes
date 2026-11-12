@@ -10,6 +10,34 @@ public enum Log {
     public static let ai = Logger(subsystem: SuperNotesPaths.bundleID, category: "ai")
 }
 
+// MARK: - Distribution
+
+/// Which edition this build is. The Mac App Store edition (built with `APP_STORE`, see Package.swift) is sandboxed:
+/// no self-updater, no code from GitHub, no Apple Events, no command-line AI tools, and data lives in its container.
+public enum Distribution {
+    #if APP_STORE
+    public static let isAppStore = true
+    #else
+    public static let isAppStore = false
+    #endif
+
+    /// The real home folder; inside the sandbox `homeDirectoryForCurrentUser` is the container's.
+    public static var userHome: URL {
+        guard let dir = getpwuid(getuid())?.pointee.pw_dir else { return FileManager.default.homeDirectoryForCurrentUser }
+        return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
+    }
+
+    /// The direct-download edition's data folder, which the Store edition can copy from (with the user's pick).
+    public static var directSupportFolder: URL {
+        userHome.appendingPathComponent("Library/Application Support/\(SuperNotesPaths.supportFolderName)", isDirectory: true)
+    }
+
+    /// The direct-download edition's preferences file.
+    public static var directPreferencesFile: URL {
+        userHome.appendingPathComponent("Library/Preferences/com.udsy.supernotes.plist")
+    }
+}
+
 // MARK: - Alerts & HUD
 
 @MainActor

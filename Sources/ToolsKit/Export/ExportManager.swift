@@ -92,6 +92,19 @@ public final class ExportManager: ExportServicing {
 
     // MARK: Destinations
 
+    #if APP_STORE
+    /// The sandboxed edition has no Apple Events: Notes' own share extension takes the text (the user picks the
+    /// folder and confirms in its sheet).
+    static let notesShareService = NSSharingService.Name("com.apple.Notes.SharingExtension")
+
+    private func exportToAppleNotes(_ body: String) {
+        guard let service = NSSharingService(named: Self.notesShareService), service.canPerform(withItems: [body]) else {
+            Alerts.error("Apple Notes isn't available to share to. Use Copy, or export as Markdown instead."); return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        service.perform(withItems: [body])
+    }
+    #else
     private func exportToAppleNotes(_ body: String) {
         let html = ExportText.html(body).replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
@@ -113,6 +126,7 @@ public final class ExportManager: ExportServicing {
             "Open System Settings → Privacy & Security → Automation, find Super Notes and turn on Notes, then export again."
         }
     }
+    #endif
 
     private func openURL(_ string: String, app: String) {
         guard string.count <= Self.maxURLLength else {

@@ -16,8 +16,13 @@ func registerAIKitTests() {
         check(pick(nil, apple: false) == .onDevice && pick(nil, apple: true) == .apple, "nothing picked: Apple's model where present, else the download")
         check(pick(.onDevice, apple: true) == .onDevice, "the downloaded model when picked")
         check(pick(.apple, apple: false) == .onDevice && pick(.apple, apple: true) == .apple, "Apple's model only where the Mac has it")
+        #if APP_STORE
+        check(pick(.commandLine, apple: true) == .apple && pick(.commandLine, apple: false) == .onDevice,
+              "the Store edition has no command-line engine: the choice falls back to the on-device engines")
+        #else
         check(pick(.commandLine, apple: true) == .commandLine && pick(.commandLine, apple: false, tool: false) == .commandLine,
               "a picked command-line tool is used even before one is found (readiness explains)")
+        #endif
         check(EngineSelection.shouldDownload(engine: .onDevice, autoDownload: true, installed: false), "download for the on-device engine")
         check(!EngineSelection.shouldDownload(engine: .onDevice, autoDownload: false, installed: false), "not when turned off")
         check(!EngineSelection.shouldDownload(engine: .onDevice, autoDownload: true, installed: true), "not when installed")
@@ -54,7 +59,9 @@ func registerAIKitTests() {
 
     SelfTest.cases.append(("AIKit.downloadManager", { MainActor.assumeIsolated { downloadManagerTests() } }))
     SelfTest.cases.append(("AIKit.jsBridge", { MainActor.assumeIsolated { jsBridgeTests() } }))
+    #if !APP_STORE
     SelfTest.cases.append(("AIKit.commandLineEngine", { MainActor.assumeIsolated { commandLineTests() } }))
+    #endif
     SelfTest.cases.append(("AIKit.llamaSmoke", { MainActor.assumeIsolated { llamaSmokeTest() } }))
 }
 
@@ -339,6 +346,7 @@ private func jsBridgeTests() {
 
 // MARK: - Command-line engine over fake executables
 
+#if !APP_STORE
 @MainActor
 private func commandLineTests() {
     let bin = scratch("bin")
@@ -413,6 +421,7 @@ private func commandLineTests() {
     if case .unavailable(let reason) = service.readiness { check(reason.contains("Try again when the download finishes"), "blocked download: \(reason)") }
     else { check(false, "a blocked download isn't ready: \(service.readiness)") }
 }
+#endif
 
 // MARK: - The real model, when a GGUF is at hand
 

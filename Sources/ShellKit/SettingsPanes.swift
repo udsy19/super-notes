@@ -107,8 +107,13 @@ private struct ICloudSection: View {
                     Text(Services.sync?.statusText ?? "Sync isn't available.").foregroundStyle(.secondary)
                 }
             }
-            Button("Sync Now") { Services.sync?.syncNow() }
-                .disabled(!(syncNotes || syncPreferences || syncExtensions))
+            HStack {
+                Button("Sync Now") { Services.sync?.syncNow() }
+                    .disabled(!(syncNotes || syncPreferences || syncExtensions))
+                #if APP_STORE
+                Button("Choose iCloud Drive Folder…") { Services.sync?.chooseFolder() }
+                #endif
+            }
             Captioned("Your other Macs need the same key to read synced notes. It travels through iCloud Keychain when available; otherwise move it by hand.") {
                 HStack {
                     Button("Copy Encryption Key") { Maintenance.copySyncKey() }
@@ -718,6 +723,11 @@ struct NotesSettings: View {
                         Button("Import JSON…") { Maintenance.importJSON() }
                     }
                 }
+                #if APP_STORE
+                Captioned("Copies notes, extensions, themes and settings from the direct-download Super Notes on this Mac. The original stays as it is.") {
+                    Button("Import from Super Notes (direct download)…") { Services.importDirectEdition?() }
+                }
+                #endif
             }
             Section("Reset") {
                 HStack {
@@ -1202,7 +1212,17 @@ struct PrivacySettings: View {
         var id: String { title }
     }
 
+    /// The Mac App Store edition has no self-updater and doesn't fetch extensions, so those calls aren't listed.
     private var groups: [(title: String, subtitle: String, calls: [Call])] {
+        let all = allGroups
+        guard Distribution.isAppStore else { return all }
+        return all.filter { $0.title != "Updates" }.map { group in
+            (group.title, group.title == "Extensions" ? "Calls that extensions make to their own services." : group.subtitle,
+             group.calls.filter { $0.title != "Check GitHub for extension updates" })
+        }
+    }
+
+    private var allGroups: [(title: String, subtitle: String, calls: [Call])] {
         [("iCloud Sync", "Calls to your own iCloud Drive to keep notes, settings and extensions in sync across your Macs.", [
             Call(title: "Sync notes with iCloud", detail: "Writes encrypted notes to your own iCloud Drive.",
                  endpoint: "iCloud Drive (Super Notes folder)", isOn: $syncNotes),
@@ -1276,6 +1296,7 @@ struct UpdatesSettings: View {
     @Default(.lastUpdateCheck) private var lastCheck
 
     private var updateStatus: String {
+        guard !Distribution.isAppStore else { return "Updates come from the Mac App Store." }
         guard installUpdates else { return "Automatic updates are turned off in Privacy settings." }
         guard lastCheck > 0 else { return "Not checked for updates yet." }
         return "Last checked " + Date(timeIntervalSince1970: lastCheck).formatted(date: .abbreviated, time: .shortened) + "."

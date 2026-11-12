@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import CryptoKit
 import SQLite3
 import SuperNotesCore
@@ -28,6 +28,43 @@ func registerStorageKitTests() {
                             backupsFolder: dir.appendingPathComponent("\(name)-backups"))
     }
     @MainActor func texts(_ notes: [Note]) -> [String] { notes.map(\.content) }
+
+    // The Store edition's "Import from Super Notes (direct download)": a fixture laid out like the direct edition's
+    // Application Support folder is copied in; the source is left byte-for-byte as it was.
+    storageCase("directEditionImport") { dir in
+        let fm = FileManager.default
+        let direct = dir.appendingPathComponent("Direct/Super Notes", isDirectory: true)
+        try fm.createDirectory(at: direct, withIntermediateDirectories: true)
+        let source = try SQLiteNoteStore(url: direct.appendingPathComponent("notes.sqlite"),
+                                         backupsFolder: direct.appendingPathComponent("Backups"))
+        _ = source.create(content: "groceries\n- milk"); _ = source.create(content: "math\n2+2")
+        for (path, text) in [("Extensions/mine/extension.json", "{}"), ("Themes/Night.json", "{}"),
+                             ("Models/model.gguf", "GGUF"), ("Models/model.gguf.partial", "GG")] {
+            let url = direct.appendingPathComponent(path)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        func listing() -> [String] { (fm.enumerator(atPath: direct.path)?.allObjects as? [String] ?? []).sorted() }
+        let before = listing()
+        let support = dir.appendingPathComponent("Container/Super Notes", isDirectory: true)
+        let store = try makeStore(dir, "container")
+        _ = store.create(content: "already here")
+        let summary = try DirectEditionImport.importData(from: direct, into: store, support: support)
+        check(summary.notes == 2 && Set(texts(store.deck)) == ["groceries\n- milk", "math\n2+2", "already here"], "notes merged: \(summary)")
+        check(summary.extensions == ["mine"] && summary.themes == ["Night.json"] && summary.models == ["model.gguf"], "folders copied: \(summary)")
+        check(fm.fileExists(atPath: support.appendingPathComponent("Extensions/mine/extension.json").path)
+              && !fm.fileExists(atPath: support.appendingPathComponent("Models/model.gguf.partial").path), "files land in the container")
+        check(listing() == before && source.deck.count == 2, "the direct edition's folder is untouched")
+        let again = try DirectEditionImport.importData(from: direct, into: store, support: support)
+        check(again == .init(), "a second import changes nothing")
+        check((try? DirectEditionImport.importData(from: dir, into: store, support: support)) == nil, "a folder without notes is refused")
+
+        let prefs = dir.appendingPathComponent("com.udsy.supernotes.plist")
+        NSDictionary(dictionary: ["pomodoroWorkMinutes": 19, "syncNotes": true, "unrelated": "x"]).write(to: prefs, atomically: true)
+        let imported = try DirectEditionImport.importPreferences(from: prefs)
+        check(imported == 1 && Defaults[.pomodoroWorkMinutes] == 19
+              && !Defaults.store.bool(forKey: "syncNotes"), "only shareable settings are imported")
+    }
 
     storageCase("ordering") { dir in
         let s = try makeStore(dir)

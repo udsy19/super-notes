@@ -20,7 +20,9 @@ struct AISettingsView: View {
                 Picker("Answer with", selection: Binding(get: { service.engine }, set: { preferred = $0 })) {
                     Text("On-device model (default)").tag(AIEngineKind.onDevice)
                     Text("Apple on-device model (macOS 26)").tag(AIEngineKind.apple)
-                    Text(service.selectedTool?.label ?? "Use an installed command-line tool").tag(AIEngineKind.commandLine)
+                    if !Distribution.isAppStore {
+                        Text(service.selectedTool?.label ?? "Use an installed command-line tool").tag(AIEngineKind.commandLine)
+                    }
                 }
                 Text(engineCaption).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if service.engine == .commandLine { toolControls }
@@ -53,7 +55,7 @@ struct AISettingsView: View {
                     }
                 }
                 Toggle(isOn: $autoDownload) {
-                    Text("Download models automatically")
+                    Text("Download models automatically (\(downloader.spec.sizeText))")
                     Text("Fetches the model a few minutes after launch, on Wi-Fi or another unmetered connection, never in Low Power Mode, and only with 10 GB free.")
                 }
             }
