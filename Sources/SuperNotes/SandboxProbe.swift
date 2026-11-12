@@ -76,7 +76,7 @@ enum SandboxProbe {
             _ = source.create(content: "imported from direct")
             try "{}".write(to: fixture.appendingPathComponent("Extensions/fixture-ext/extension.json"), atomically: true, encoding: .utf8)
             let target = try SQLiteNoteStore()
-            let summary = try DirectEditionImport.importData(from: fixture, into: target)
+            let summary = try DirectEditionImport.importData(from: fixture, into: target, modelFileName: nil, githubExtensions: [])
             report("import.fixture", summary.notes == 1 && target.deck.contains { $0.content == "imported from direct" }, summary.text)
             try? fm.removeItem(at: support.appendingPathComponent("Extensions/fixture-ext"))
         } catch { report("import.fixture", false, "\(error)") }
