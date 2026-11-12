@@ -34,9 +34,13 @@ ID; the brief forbids it). TCC grants (Automation, notifications, login item) do
 
 Import flow: NSOpenPanel opens at the direct edition's folder (`Distribution.directSupportFolder`, real home via
 `getpwuid`), the user confirms, the database is copied to the container's temp folder (with `-wal`/`-shm`), opened
-there and merged with `importJSON` (newer edits win); `Extensions/`, `Themes/` and finished `Models/*.gguf` are
-copied when not already present. A second, optional panel picks `~/Library/Preferences/com.udsy.supernotes.plist`;
-only the settings iCloud sync carries (`PreferencesSync.keyNames`) are applied. Keychain items (sync key, extension
+there and merged with `importJSON` (newer edits win). Refused: a running direct edition (quit it first), a
+symlinked `notes.sqlite`/`-wal`/`-shm` (SQLite would write through it), and a copy that recovers to zero notes
+(torn mid-write). `Themes/` are copied when not already present; symlinks are skipped. Only the catalog model
+(`Qwen3.5-2B-Q4_K_M.gguf`) is copied, as `.partial`, and AIKit installs it only if its SHA-256 matches. An optional
+panel picks `~/Library/Preferences/com.udsy.supernotes.plist`: it supplies the shareable settings
+(`PreferencesSync.keyNames`) and the direct edition's `extensions.sources`, so only the user's own extensions are
+copied and GitHub-installed ones stay behind (without that file no extension is copied). Keychain items (sync key, extension
 API keys) cannot be read across editions: the sync key moves with the existing "Copy Encryption Key / Paste Key"
 buttons, API keys are re-entered.
 

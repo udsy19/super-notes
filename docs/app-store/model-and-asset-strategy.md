@@ -22,7 +22,11 @@ entry. Bundling remains possible (copy into `Contents/Resources`, point `ModelDo
 - Settings → AI shows "Qwen3.5 2B (Q4_K_M) · 1.28 GB · Apache-2.0 · downloaded once from huggingface.co".
 - "Download Now" opens an alert with name, size, licence, source and SHA-256 check; only "Download 1.28 GB" starts it.
 - The "Download models automatically (1.28 GB)" switch (Settings → AI, Settings → Privacy) is the opt-in for background fetching.
-- Downloads keep AIKit's policy: unmetered network, not in Low Power Mode, ≥ 10 GB free, low priority, resumable, SHA-256 checked.
+- Automatic downloads keep AIKit's policy: unmetered network, not in Low Power Mode, ≥ 10 GB free, low priority.
+  "Download Now" is the user's explicit consent and skips the Low Power Mode and metered-network waits (the 10 GB
+  free-disk check stays). Every download is resumable and SHA-256 checked.
+- A model copied by "Import from Super Notes (direct download)" lands as `<file>.partial` and is installed only
+  after the same SHA-256 check (`ModelDownloader.adoptImported`); a mismatch is deleted.
 - The features the model enables (`::ask`, `::summarize`, `::rewrite`, `::translate`) are visible in the binary
   and reviewable: see review-notes.md for the exact steps.
 

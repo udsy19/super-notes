@@ -235,10 +235,10 @@ private struct ExtensionDetail: View {
                             }
                         }
                     }
-                    #endif
                     if let source = Defaults[.extensionsSources][ext.manifest.name], let url = URL(string: source) {
                         Button("Open GitHub Repo") { NSWorkspace.shared.open(url) }
                     }
+                    #endif
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([ext.folder]) }
                     if !ext.isBundled {
                         Button("Remove Extension", role: .destructive) {

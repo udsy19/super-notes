@@ -12,8 +12,12 @@ imported into another store: notes merged, folders copied, `.partial` skipped, s
 afterwards, a second import is a no-op, a folder without notes is refused, only shareable settings are applied.
 Store-only adjustments: UpdateKit, GitHub-extension and CLI-engine cases are compiled out with their code; the
 engine-selection case asserts the Store fallback instead.
-Known flake (pre-existing, timing-based, both editions, ~1 run in 3 while the CPU is busy):
-`EditorKit.undoSurvivesAutosave` waits a fixed 0.5 s for a debounced save. Not touched by this branch.
+Review fixes added cases: a tampered imported GGUF is rejected and deleted, a matching one installs without the
+network; Download Now runs in Low Power Mode on a metered network but still waits for disk; the import refuses a
+symlinked database and a torn copy (with "Quit the direct-download Super Notes"), copies only the catalog model as
+`.partial`, skips GitHub-installed extensions (none without the settings file).
+`EditorKit.undoSurvivesAutosave` was flaky (fixed 0.5 s wait for a debounced save); it now polls up to 3 s —
+4/4 direct and 3/3 Store runs passed.
 
 ## Sandboxed experiments (ad-hoc signed, App Sandbox enforced)
 Build: `ADHOC=1 ./scripts/package-appstore.sh --debug`, then
@@ -69,11 +73,12 @@ Exiting while the llama model is loaded aborted in ggml-metal's static destructo
 files.user-selected.read-write, files.bookmarks.app-scope; Info.plist bundle ID `com.udsy.supernotes.appstore`,
 no `NSAppleEventsUsageDescription`; `Contents/Resources/Licenses/llama.cpp-LICENSE.txt` present; `strings`:
 `/opt/homebrew|/usr/local` 0, probe 0, `NSAppleScript` imports 0 (the only `github` strings are Privacy-pane labels
-that the Store build filters out at runtime). `open`ed the app: ran 8 s sandboxed, zero SuperNotes sandbox denials,
+that the Store build filters out at runtime; "Open GitHub Repo" is compiled out of the Store build). `open`ed the app: ran 8 s sandboxed, zero SuperNotes sandbox denials,
 exited cleanly on SIGTERM.
 `./scripts/package-appstore.sh` without credentials: exits 2 naming the three missing variables.
-Direct edition `./scripts/build-app.sh`: unchanged output (`build/Super Notes.app`, bundle `com.udsy.supernotes`,
-apple-events + disable-library-validation, local identity).
+Direct edition `./scripts/build-app.sh`: same bundle as before (`build/Super Notes.app`, bundle
+`com.udsy.supernotes`, apple-events + disable-library-validation, local identity) plus one addition:
+`Contents/Resources/Licenses/llama.cpp-LICENSE.txt` (the MIT notice was missing from both editions).
 
 ## Needs a human run (exact steps)
 1. `ADHOC=1 ./scripts/package-appstore.sh && open "build/appstore/Super Notes.app"`.

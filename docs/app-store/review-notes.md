@@ -27,7 +27,8 @@ on they use Apple's Foundation Models — nothing to download. Otherwise they ne
 (Qwen3.5 2B, Apache-2.0) that is **only downloaded after the user agrees**:
 1. Settings (⌘,) → AI → "On-device model" shows its name, size (1.28 GB), licence and source (huggingface.co).
 2. Click **Download Now** → an alert repeats the size and source → **Download 1.28 GB**.
-3. When the status says Installed (a few minutes on fast Wi-Fi; it waits for an unmetered network and AC power),
+3. When the status says Installed (a few minutes on fast Wi-Fi; Download Now starts right away, even in Low Power
+   Mode or on a metered connection — only the optional automatic download waits for those),
    type `::ask(What is the capital of France?)` on a new line in a note and press Return.
 The file is model weights (data), checked against a SHA-256 pinned in the app, stored in the app's container and
 read by the llama.cpp library bundled and signed in the app. No code is downloaded.
@@ -37,7 +38,9 @@ read by the llama.cpp library bundled and signed in the app. No code is download
   Choose iCloud Drive Folder…). The key is created on the Mac and stored in the Keychain.
 - **Export → Apple Notes** uses Notes' own share sheet (no Apple Events).
 - **Import from Super Notes (direct download)…** (Settings → Notes) copies data from the free direct-download
-  edition after the user picks its folder. It does nothing if that edition was never used.
+  edition after the user picks its folder. It does nothing if that edition was never used. Extensions the direct
+  edition installed from GitHub are not copied (only ones the user wrote); a copied AI model is installed only if
+  its SHA-256 matches the pinned value.
 - **Updates** come only from the Mac App Store; the app contains no updater.
 - **Global hotkey** ⌥A uses `RegisterEventHotKey`; no Accessibility or Input Monitoring permission is requested.
 - Optional **Launch at login** (Settings → General) uses `SMAppService` and is off by default.
