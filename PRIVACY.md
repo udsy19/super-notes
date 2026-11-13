@@ -106,3 +106,17 @@ Automation permission the first time. Markdown, plain text and PDF exports are f
 Run `curl -fsSL https://udsy19.github.io/super-notes/install.sh | bash -s -- --uninstall`, then delete
 `~/Library/Application Support/Super Notes` and `~/Library/Preferences/com.udsy.supernotes.plist`. If you used sync, also
 delete the `Super Notes` folder in iCloud Drive.
+
+## Mac App Store edition
+
+Super Notes from the Mac App Store (`com.udsy.supernotes.appstore`) follows everything above, with these differences:
+
+- **Data collected by the developer: none.** No analytics, no accounts, no servers. Your notes are never sent to the developer.
+- **No updates check.** The App Store edition has no built-in updater and never contacts GitHub; the App Store updates it.
+- **Network use**, each with its own switch in **Settings → Privacy**:
+  - Currency rates from `open.er-api.com` and `api.coingecko.com` (on by default): a plain request for the latest rates; no note text or identifiers.
+  - The on-device AI model from `huggingface.co`: **off until you agree** to the download (1.28 GB, verified against a SHA-256 before use). Prompts and notes never leave your Mac.
+  - iCloud Drive sync of notes and preferences (off by default), encrypted on your Mac with AES-GCM before it is written to your own iCloud Drive.
+- **Extensions** in the App Store edition cannot use the network, cannot be installed from GitHub or a URL, and are imported only from a folder you choose.
+- **Where data lives:** inside the app's sandbox container, `~/Library/Containers/com.udsy.supernotes.appstore/`. Importing from the direct download is a copy you start; nothing is moved or deleted.
+- **Removing everything:** delete the app, then the container folder above.
