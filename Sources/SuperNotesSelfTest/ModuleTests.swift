@@ -13,7 +13,9 @@ func registerModuleTests() {
     registerEditorParityTests()
     registerSettingsBehaviourTests()
     registerFindShelfTests()
+    #if !APP_STORE
     registerUpdateKitTests()
+    #endif
     registerUndoTests()
     registerSlotsTests()
     registerAIKitTests()

@@ -1,6 +1,10 @@
 import Foundation
 import SuperNotesCore
 
+// Installing and updating extensions from GitHub is the direct edition's only: the Mac App Store edition never
+// downloads code (App Review Guideline 2.5.2). It runs the bundled extensions and the ones the user writes in the
+// Extensions folder; see docs/app-store/review-notes.md.
+#if !APP_STORE
 /// A GitHub location of an extension: repository plus optional branch and sub-folder.
 public struct GitHubSource: Equatable, Sendable {
     public var owner: String
@@ -110,7 +114,10 @@ extension ExtensionsManager {
         }
         try await install(fromGitHub: location)
     }
+}
+#endif
 
+extension ExtensionsManager {
     /// Deletes a user-installed extension's folder (bundled extensions can only be disabled).
     public func remove(_ name: String) throws {
         if installed.contains(where: { $0.manifest.name == name && $0.isBundled }) {

@@ -29,7 +29,7 @@ public final class AIService: ObservableObject, AIServicing {
         let folder = SuperNotesPaths.models
         let system = SystemConditions(folder: folder)
         self.init(downloader: ModelDownloader(spec: ModelCatalog.default, folder: folder, conditions: { system.current }),
-                  system: system, tools: CommandLineTools.detect(in: CommandLineTools.searchDirectories()))
+                  system: system, tools: Self.installedTools())
     }
 
     /// A service over an injected downloader and tool list (self-tests).
@@ -56,6 +56,7 @@ public final class AIService: ObservableObject, AIServicing {
     public func start() {
         guard !started else { return }
         started = true
+        downloader.adoptImported()
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstDownloadDelay) {
             MainActor.assumeIsolated { AIService.shared.downloadIfWanted() }
         }
@@ -81,8 +82,16 @@ public final class AIService: ObservableObject, AIServicing {
 
     /// Looks for command-line tools again (Settings → AI → Look Again).
     public func rescanTools() {
-        tools = CommandLineTools.detect(in: CommandLineTools.searchDirectories())
+        tools = Self.installedTools()
         refreshReadiness()
+    }
+
+    private static func installedTools() -> [CommandLineTool] {
+        #if APP_STORE
+        []
+        #else
+        CommandLineTools.detect(in: CommandLineTools.searchDirectories())
+        #endif
     }
 
     private func settingsChanged() {
@@ -132,6 +141,9 @@ public final class AIService: ObservableObject, AIServicing {
 
     public var readinessChanges: AnyPublisher<AIReadiness, Never> { readinessSubject.eraseToAnyPublisher() }
 
+    public var modelFileName: String? { downloader.spec.fileName }
+    public func adoptImportedModel() { downloader.adoptImported() }
+
     public func noteUsed() {
         guard engine == .onDevice, !downloader.isInstalled, Defaults[.aiAutoDownload] else { return }
         if case .notInstalled = downloader.state { downloader.start() }
@@ -152,8 +164,15 @@ public final class AIService: ObservableObject, AIServicing {
                 deliver(.failure(.unavailable("No command-line tool is installed.")))
                 return generation
             }
+            #if APP_STORE
+            _ = tool   // unreachable: `engine` never resolves to the command line in this edition
+            let generation = AIGeneration()
+            deliver(.failure(.unavailable("Command-line tools aren't available in the Mac App Store edition.")))
+            return generation
+            #else
             Log.ai.info("Asking \(tool.name, privacy: .public)")
             return CommandLineTools.run(tool, request: request, completion: deliver)
+            #endif
         case .onDevice:
             guard let url = downloader.installedURL else {
                 let generation = AIGeneration()
@@ -183,6 +202,14 @@ public final class AIService: ObservableObject, AIServicing {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleUnloadDelay, execute: work)
     }
 
+    /// Frees the model before the process exits: ggml's Metal device asserts in its static destructor while a model's
+    /// buffers are still allocated, which turned a quit within ten minutes of an AI command into a crash.
+    public func unloadBeforeQuit() {
+        unloadWork?.cancel()
+        llama?.unload()
+        llama = nil
+    }
+
     /// Removes the downloaded model (and unloads it).
     public func removeModel() {
         let engine = llama
@@ -192,9 +219,17 @@ public final class AIService: ObservableObject, AIServicing {
         refreshReadiness()
     }
 
-    /// Fetches the model now, whatever the schedule.
+    /// Fetches the model now, whatever the schedule. The Mac App Store edition says the size and source first and
+    /// waits for the user's yes (Guideline 4.2.3).
     public func downloadNow() {
-        downloader.retryNow()
+        if Distribution.isAppStore, !downloader.isInstalled {
+            let spec = downloader.spec
+            guard Alerts.confirm("Download the on-device AI model?",
+                                 info: "\(spec.displayName) is \(spec.sizeText) (\(spec.licence)), downloaded once from \(spec.host) "
+                                     + "and checked against its SHA-256 before use. It stays on this Mac; you can remove it in Settings → AI.",
+                                 confirmTitle: "Download \(spec.sizeText)") else { return }
+        }
+        downloader.retryNow(userRequested: true)
         refreshReadiness()
     }
 

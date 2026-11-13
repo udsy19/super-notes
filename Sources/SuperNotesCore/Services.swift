@@ -271,6 +271,15 @@ public protocol AIServicing: AnyObject {
                   completion: @escaping @Sendable (Result<String, AIError>) -> Void) -> AIGeneration
     /// Settings → AI.
     func makeSettingsView() -> NSView
+    /// The on-device model's file name in `SuperNotesPaths.models` (nil: no downloadable model).
+    var modelFileName: String? { get }
+    /// Checks a model copy placed as `<modelFileName>.partial` (import) and installs it only if its SHA-256 matches.
+    func adoptImportedModel()
+}
+
+public extension AIServicing {
+    var modelFileName: String? { nil }
+    func adoptImportedModel() {}
 }
 
 // MARK: - Other services
@@ -297,6 +306,10 @@ public protocol SyncServicing: AnyObject {
     /// The encryption key as text, for moving it to another Mac by hand when Keychain sync isn't available.
     func exportKey() -> String?
     func importKey(_ text: String) throws
+    #if APP_STORE
+    /// The sandbox can't reach iCloud Drive by path: the user picks the folder once (kept as a security-scoped bookmark).
+    func chooseFolder()
+    #endif
 }
 
 @MainActor
@@ -378,6 +391,10 @@ public enum Services {
     public static var export: ExportServicing!
     public static var editorFactory: EditorFactory!
     public static var panels: PanelServicing!
+    #if APP_STORE
+    /// "Import from Super Notes (direct download)…": copies the direct edition's data into the container (StorageKit).
+    public static var importDirectEdition: (() -> Void)?
+    #endif
 }
 
 public enum SuperNotesPaths {

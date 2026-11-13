@@ -15,7 +15,11 @@ public enum EngineSelection {
     /// picked on a Mac without it: the downloaded one. The command-line tool is used whenever it is picked; its
     /// readiness says so when no tool is installed.
     public static func resolve(preferred: AIEngineKind?, available: Availability) -> AIEngineKind {
-        switch preferred {
+        #if APP_STORE
+        // No command-line engine in the sandboxed edition (a choice synced from a direct-edition Mac falls back).
+        if preferred == .commandLine { return resolve(preferred: nil, available: available) }
+        #endif
+        return switch preferred {
         case nil: available.appleModel ? .apple : .onDevice
         case .apple?: available.appleModel ? .apple : .onDevice
         case .onDevice?: .onDevice

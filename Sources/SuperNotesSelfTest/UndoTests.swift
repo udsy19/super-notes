@@ -52,6 +52,11 @@ final class Bench {
         tv.keyDown(with: e)
     }
     func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
+    /// Runs the loop until `done` holds or `seconds` pass (a debounced save lands when the machine gets to it).
+    func spin(until done: () -> Bool, seconds: TimeInterval = 3) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+    }
     var text: String { tv.string }
     var selection: NSRange { tv.selectedRange() }
     /// What the Edit menu would show: the item's title after the first responder validated it.
@@ -226,12 +231,12 @@ func registerUndoTests() {
             defer { b.cleanup() }
             let note = b.load("saved")
             b.type(" text")
-            b.spin(0.5)
+            b.spin(until: { b.store.note(note.id)?.content == "saved text" })
             check(b.store.note(note.id)?.content == "saved text", "the debounced save wrote the note")
             check(b.text == "saved text" && b.manager.canUndo == true, "saving leaves the text and history alone")
             b.undo()
             check(b.text == "saved", "undo after autosave: \(b.text)")
-            b.spin(0.5)
+            b.spin(until: { b.store.note(note.id)?.content == "saved" })
             check(b.store.note(note.id)?.content == "saved", "the undone text is saved too")
             b.redo()
             check(b.text == "saved text", "redo after the second save: \(b.text)")

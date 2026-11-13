@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Combine
 import CryptoKit
 import SuperNotesCore
@@ -6,6 +6,8 @@ import SuperNotesCore
 extension Defaults.Keys {
     /// Last local change to a synced preference (drives preferences last-writer-wins).
     static let storagePrefsChangedAt = Key<Date>("storageKit.prefsChangedAt", default: .distantPast)
+    /// Mac App Store edition: security-scoped bookmark of the sync folder the user picked.
+    static let storageSyncFolderBookmark = Key<Data?>("storageKit.syncFolderBookmark", default: nil)
 }
 
 /// End-to-end encrypted sync through the user's iCloud Drive folder (`…/CloudDocs/Super Notes`). Active only while
@@ -13,7 +15,7 @@ extension Defaults.Keys {
 @MainActor
 public final class ICloudDriveSync: SyncServicing {
     private enum State: Equatable {
-        case off, driveOff, waitingForKey, keyMismatch, downloading, syncing, synced(Date), failed(String)
+        case off, driveOff, needsFolder, waitingForKey, keyMismatch, downloading, syncing, synced(Date), failed(String)
     }
 
     nonisolated public static var defaultRoot: URL {
@@ -22,7 +24,10 @@ public final class ICloudDriveSync: SyncServicing {
     }
 
     private let store: SQLiteNoteStore
-    private let root: URL
+    /// The sync folder; nil in the Mac App Store edition until the user has picked it.
+    private var root: URL?
+    /// Mac App Store edition: the folder the user picked, whose security scope is open.
+    private var picked: URL?
     private let keyStore: SyncKeyStoring
     private var folder: SyncFolder?
     private var state: State = .off
@@ -41,7 +46,45 @@ public final class ICloudDriveSync: SyncServicing {
 
     public convenience init(store: SQLiteNoteStore) {
         self.init(store: store, keyStore: KeychainSyncKey())
+        #if APP_STORE
+        openPickedFolder()
+        #endif
     }
+
+    #if APP_STORE
+    /// Resolves the picked folder's bookmark and keeps its security scope open while it is the sync folder.
+    private func openPickedFolder() {
+        picked?.stopAccessingSecurityScopedResource()
+        picked = nil; root = nil
+        guard let data = Defaults[.storageSyncFolderBookmark] else { return }
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, bookmarkDataIsStale: &stale),
+              url.startAccessingSecurityScopedResource() else { return }
+        if stale { Defaults[.storageSyncFolderBookmark] = try? url.bookmarkData(options: .withSecurityScope) }
+        picked = url
+        root = url.lastPathComponent == SuperNotesPaths.supportFolderName ? url
+            : url.appendingPathComponent(SuperNotesPaths.supportFolderName, isDirectory: true)
+    }
+
+    /// Asks for the iCloud Drive folder (or any folder another Mac syncs too); a pick other than a "Super Notes"
+    /// folder gets one inside it.
+    public func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = Distribution.userHome.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
+        panel.prompt = "Sync Here"
+        panel.message = "Choose iCloud Drive (or its “Super Notes” folder). Notes are encrypted before they're written there."
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url,
+              let bookmark = try? url.bookmarkData(options: .withSecurityScope) else { return }
+        Defaults[.storageSyncFolderBookmark] = bookmark
+        openPickedFolder()
+        folder = nil
+        configure()
+    }
+    #endif
 
     public var isEnabled: Bool { Defaults[.syncNotes] }
 
@@ -49,6 +92,7 @@ public final class ICloudDriveSync: SyncServicing {
         switch state {
         case .off: return "Sync is off"
         case .driveOff: return "iCloud Drive is off"
+        case .needsFolder: return "Choose the iCloud Drive folder to sync with"
         case .waitingForKey: return "Waiting for the encryption key from your other Mac"
         case .keyMismatch: return "This Mac's encryption key doesn't match the one your other Macs use"
         case .downloading: return "Waiting for iCloud Drive to download…"
@@ -105,6 +149,7 @@ public final class ICloudDriveSync: SyncServicing {
     }
 
     private func watchFolder() {
+        guard let root else { return }
         let dir = root.appendingPathComponent("notes", isDirectory: true)
         let fd = open(dir.path, O_EVTONLY)
         guard fd >= 0 else { return }
@@ -125,7 +170,9 @@ public final class ICloudDriveSync: SyncServicing {
 
     public func syncNow() {
         guard isEnabled else { state = .off; return }
-        guard FileManager.default.fileExists(atPath: root.deletingLastPathComponent().path) else { state = .driveOff; return }
+        guard let root else { state = .needsFolder; return }
+        // The folder the drive's absence shows in: the picked one in the Store edition (its parent is out of reach).
+        guard FileManager.default.fileExists(atPath: (picked ?? root.deletingLastPathComponent()).path) else { state = .driveOff; return }
         guard let folder = resolveFolder() else { return }
         state = .syncing
         applying = true
@@ -147,6 +194,7 @@ public final class ICloudDriveSync: SyncServicing {
     /// Finds or creates the key and checks it against the folder's `key.check`.
     private func resolveFolder() -> SyncFolder? {
         if let folder { return folder }
+        guard let root else { state = .needsFolder; return nil }
         let key = keyStore.load()
         switch SyncFolder.keyCheckState(root: root, key: key) {
         case .downloading:

@@ -40,6 +40,15 @@ public final class ModelDownloader: NSObject, ObservableObject {
     private let conditions: @MainActor () -> DownloadConditions
     private let configuration: URLSessionConfiguration
     private lazy var session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
+    /// For a download the user asked for: metered and Low Data Mode paths are allowed too.
+    private lazy var userSession: URLSession = {
+        let config = configuration.copy() as! URLSessionConfiguration
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
+        return URLSession(configuration: config, delegate: self, delegateQueue: .main)
+    }()
+    /// The user clicked Download Now: Low Power Mode and metered networks no longer hold it (the disk check stays).
+    private var userRequested = false
     private let io = DispatchQueue(label: "supernotes.ai.download", qos: .utility)
     private var task: URLSessionDataTask?
     private var handle: FileHandle?
@@ -88,12 +97,18 @@ public final class ModelDownloader: NSObject, ObservableObject {
         attempt()
     }
 
+    /// What holds the download now: the system's conditions, minus power and network once the user asked for it.
+    private var blocker: DownloadConditions.Blocker? {
+        let blocker = conditions().blocker
+        return userRequested && blocker != .disk ? nil : blocker
+    }
+
     /// Re-reads the conditions: a running download pauses when they turn bad (the partial file stays), a waiting
     /// one starts when they turn good.
     public func conditionsChanged() {
         guard wanted, !isInstalled else { return }
         if task != nil {
-            if let blocker = conditions().blocker { pause(blocker) }
+            if let blocker { pause(blocker) }
         } else {
             attempt()
         }
@@ -102,6 +117,7 @@ public final class ModelDownloader: NSObject, ObservableObject {
     /// Stops wanting the model (the setting was turned off). A partial file is kept for a later start.
     public func stop() {
         wanted = false
+        userRequested = false
         retryWork?.cancel(); retryWork = nil; nextAttempt = nil
         cancelTask()
         if !isInstalled { state = .notInstalled }
@@ -115,17 +131,29 @@ public final class ModelDownloader: NSObject, ObservableObject {
         state = .notInstalled
     }
 
-    /// Forgets the retry gap and tries now.
-    public func retryNow() {
+    /// Forgets the retry gap and tries now. `userRequested` (Download Now) is the user's consent to download on
+    /// battery saver or a metered network; only a short disk still holds it.
+    public func retryNow(userRequested: Bool = false) {
         failures = 0
+        if userRequested { self.userRequested = true }
         start()
+    }
+
+    /// A copy of the model put next to it as `<file>.partial` (Import from the direct edition) becomes the model only
+    /// when its size and SHA-256 match; anything else is deleted. No network.
+    public func adoptImported() {
+        guard !isInstalled, task == nil else { return }
+        let size = (try? FileManager.default.attributesOfItem(atPath: partialURL.path)[.size] as? Int64) ?? -1
+        guard size >= 0 else { return }
+        guard size == spec.bytes else { try? FileManager.default.removeItem(at: partialURL); return }
+        verify()
     }
 
     // MARK: - The attempt
 
     private func attempt() {
         guard task == nil else { return }
-        if let blocker = conditions().blocker {
+        if let blocker {
             state = .waiting(blocker)
             // The network and power monitors call back on their own; a short disk is looked at again daily.
             if blocker == .disk { scheduleRetry(after: Self.diskRetryInterval) }
@@ -150,7 +178,8 @@ public final class ModelDownloader: NSObject, ObservableObject {
         request.allowsConstrainedNetworkAccess = false
         request.setValue("SuperNotes", forHTTPHeaderField: "User-Agent")
         if received > 0 { request.setValue("bytes=\(received)-", forHTTPHeaderField: "Range") }
-        let task = session.dataTask(with: request)
+        if userRequested { request.allowsExpensiveNetworkAccess = true; request.allowsConstrainedNetworkAccess = true }
+        let task = (userRequested ? userSession : session).dataTask(with: request)
         task.priority = URLSessionTask.lowPriority
         self.task = task
         state = .downloading(received: received, total: spec.bytes)
@@ -220,6 +249,8 @@ public final class ModelDownloader: NSObject, ObservableObject {
     private func verified(_ ok: Bool) {
         guard ok else {
             try? FileManager.default.removeItem(at: partialURL)
+            // An imported copy nobody is downloading: just not installed (Download Now fetches a good one).
+            guard wanted else { state = .notInstalled; return Log.ai.error("Discarded a model copy that didn't match its SHA-256") }
             return fail("The download didn't match its SHA-256")
         }
         do {
@@ -230,6 +261,7 @@ public final class ModelDownloader: NSObject, ObservableObject {
             return fail("Couldn't move the model into place: \(error.localizedDescription)")
         }
         wanted = false
+        userRequested = false
         failures = 0
         nextAttempt = nil
         state = .installed

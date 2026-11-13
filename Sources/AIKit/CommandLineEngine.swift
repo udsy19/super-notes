@@ -19,6 +19,10 @@ public struct CommandLineTool: Equatable, Sendable, Identifiable {
     public var label: String { "Use an installed command-line tool: \(name)" }
 }
 
+// Finding and running another program is the direct edition's only: a sandboxed app can't run tools installed
+// outside its bundle (they inherit its sandbox and can't read their own sign-in), so the Mac App Store edition
+// offers the on-device engines alone.
+#if !APP_STORE
 /// How a tool is run: its arguments, what goes to its standard input, and where the answer comes out.
 public struct CommandLineInvocation: Equatable, Sendable {
     public var arguments: [String]
@@ -158,3 +162,4 @@ public enum CommandLineTools {
         func claim() -> Bool { lock.withLock { defer { claimed = true }; return !claimed } }
     }
 }
+#endif

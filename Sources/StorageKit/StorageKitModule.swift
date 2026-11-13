@@ -28,6 +28,9 @@ public enum StorageKitModule {
         let sync = ICloudDriveSync(store: store)
         Services.store = store
         Services.sync = sync
+        #if APP_STORE
+        Services.importDirectEdition = { DirectEditionImport.run(into: store) }
+        #endif
 
         if let recovery = store.recovery { Alerts.error(recovery.message) }
         let recovered = recoverDrafts(into: store)

@@ -3,9 +3,23 @@
 # + Intel) and signs it with the project-local identity from scripts/signing-setup.sh (falls back to ad-hoc).
 # The llama.cpp framework (a SwiftPM binary target) is embedded in Contents/Frameworks, the executable gets the
 # matching rpath, and every nested piece is signed before the bundle that seals it.
+#
+# DISTRIBUTION=direct (default) builds the direct-download edition exactly as before.
+# DISTRIBUTION=appstore builds the Mac App Store edition into build/appstore/ (its own .build-appstore cache): the
+# APP_STORE condition, no UpdateKit, the Store bundle ID, unsigned. scripts/package-appstore.sh signs and packages it.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 CONFIG=release; [ "${1:-}" = "--debug" ] && CONFIG=debug
+DISTRIBUTION="${DISTRIBUTION:-direct}"
+# The Store edition's bundle ID: the one place it is defined (change it before registering in App Store Connect).
+APPSTORE_BUNDLE_ID="com.udsy.supernotes.appstore"
+SCRATCH="$ROOT/.build"; APP_DIR="$ROOT/build"
+case "$DISTRIBUTION" in
+  direct) ;;
+  appstore) export SUPERNOTES_DISTRIBUTION=appstore; SCRATCH="$ROOT/.build-appstore"; APP_DIR="$ROOT/build/appstore" ;;
+  *) echo "DISTRIBUTION must be direct or appstore (got '$DISTRIBUTION')" >&2; exit 1 ;;
+esac
+swift() { if [ "$1" = build ]; then shift; command swift build --scratch-path "$SCRATCH" "$@"; else command swift "$@"; fi; }
 if [ "${UNIVERSAL:-0}" = 1 ]; then
   # Build each architecture separately (the CLT toolchain has no multi-arch build) and merge with lipo.
   for arch in arm64 x86_64; do swift build -c "$CONFIG" --product SuperNotes --triple "$arch-apple-macosx14.0"; done
@@ -17,10 +31,17 @@ else
   BIN="$(swift build -c "$CONFIG" --show-bin-path)"; RES_BIN="$BIN"
 fi
 
-APP="$ROOT/build/Super Notes.app"
+APP="$APP_DIR/Super Notes.app"
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN/SuperNotes" "$APP/Contents/MacOS/SuperNotes"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+if [ "$DISTRIBUTION" = appstore ]; then
+  PB=/usr/libexec/PlistBuddy
+  $PB -c "Set :CFBundleIdentifier $APPSTORE_BUNDLE_ID" "$APP/Contents/Info.plist"
+  $PB -c "Set :CFBundleURLTypes:0:CFBundleURLName $APPSTORE_BUNDLE_ID" "$APP/Contents/Info.plist"
+  # No Apple Events in the sandboxed edition (Export → Apple Notes uses Notes' share extension).
+  $PB -c "Delete :NSAppleEventsUsageDescription" "$APP/Contents/Info.plist"
+fi
 # SwiftPM resource bundles (ExtensionsKit ships its bundled JavaScript extensions this way).
 find "$RES_BIN" -maxdepth 1 -name 'SuperNotes_*.bundle' -exec cp -R {} "$APP/Contents/Resources/" \;
 
@@ -28,7 +49,7 @@ find "$RES_BIN" -maxdepth 1 -name 'SuperNotes_*.bundle' -exec cp -R {} "$APP/Con
 # framework with Metal embedded).
 FRAMEWORKS=()
 for name in llama; do
-  SLICE="$(find "$ROOT/.build/artifacts" -type d -path "*/$name.xcframework/macos-*" -name "$name.framework" | head -1)"
+  SLICE="$(find "$SCRATCH/artifacts" -type d -path "*/$name.xcframework/macos-*" -name "$name.framework" | head -1)"
   [ -n "$SLICE" ] || { echo "Missing $name.framework in .build/artifacts; run swift build first" >&2; exit 1; }
   # cp -R keeps the Versions/Current symlink layout; dSYMs stay out of the bundle.
   cp -R "$SLICE" "$APP/Contents/Frameworks/$name.framework"
@@ -47,6 +68,12 @@ if [ ! -f "$ROOT/build/AppIcon.icns" ]; then
   swift "$ROOT/scripts/make-icon.swift" "$ICONSET" && iconutil -c icns "$ICONSET" -o "$ROOT/build/AppIcon.icns"
 fi
 cp "$ROOT/build/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# Third-party notices (llama.cpp is MIT: its notice travels with every copy).
+cp -R "$ROOT/Resources/Licenses" "$APP/Contents/Resources/Licenses"
+
+if [ "$DISTRIBUTION" = appstore ]; then
+  echo "Built $APP (unsigned; sign and package with scripts/package-appstore.sh)"; exit 0
+fi
 
 KC="$ROOT/.signing/supernotes.keychain-db"
 ENT="$ROOT/Resources/SuperNotes.entitlements"

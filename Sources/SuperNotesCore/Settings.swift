@@ -315,7 +315,8 @@ public extension Defaults.Keys {
     /// the Mac has it, else the downloaded one.
     static let aiEngine = Key<AIEngineKind?>("aiEngine", default: nil)
     /// Fetch the on-device model in the background without asking (Settings → Privacy lists it as well).
-    static let aiAutoDownload = Key<Bool>("aiAutoDownload", default: true)
+    /// Off in the Mac App Store edition: the 1.3 GB model comes only after the user agrees to it (Guideline 4.2.3).
+    static let aiAutoDownload = Key<Bool>("aiAutoDownload", default: !Distribution.isAppStore)
     /// Path of the command-line tool the `commandLine` engine runs (empty: the first one found).
     static let aiCommandLineTool = Key<String>("aiCommandLineTool", default: "")
 

@@ -6,7 +6,9 @@ import ExtensionsKit
 import EditorKit
 import ShellKit
 import ToolsKit
-import UpdateKit
+#if !APP_STORE
+import UpdateKit   // the Mac App Store edition gets updates from the App Store; UpdateKit isn't even linked
+#endif
 import AIKit
 
 @MainActor
@@ -20,12 +22,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AIKitModule.install()
         EditorKitModule.install()
         ToolsKitModule.install()
+        #if !APP_STORE
         UpdateKitModule.install()
+        #endif
         ShellKitModule.install()
     }
 }
 
 let app = NSApplication.shared
+#if DEBUG
+if CommandLine.arguments.contains("--sandbox-probe") {
+    MainActor.assumeIsolated { SandboxProbe.run(withModel: CommandLine.arguments.contains("--with-model")) }
+}
+#endif
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
 app.run()

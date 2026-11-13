@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import CryptoKit
 import SQLite3
 import SuperNotesCore
@@ -28,6 +28,74 @@ func registerStorageKitTests() {
                             backupsFolder: dir.appendingPathComponent("\(name)-backups"))
     }
     @MainActor func texts(_ notes: [Note]) -> [String] { notes.map(\.content) }
+
+    // The Store edition's "Import from Super Notes (direct download)": a fixture laid out like the direct edition's
+    // Application Support folder is copied in; the source is left byte-for-byte as it was.
+    storageCase("directEditionImport") { dir in
+        let fm = FileManager.default
+        let direct = dir.appendingPathComponent("Direct/Super Notes", isDirectory: true)
+        try fm.createDirectory(at: direct, withIntermediateDirectories: true)
+        let source = try SQLiteNoteStore(url: direct.appendingPathComponent("notes.sqlite"),
+                                         backupsFolder: direct.appendingPathComponent("Backups"))
+        _ = source.create(content: "groceries\n- milk"); _ = source.create(content: "math\n2+2")
+        for (path, text) in [("Extensions/mine/extension.json", "{}"), ("Extensions/fromgithub/extension.json", "{}"),
+                             ("Themes/Night.json", "{}"), ("Models/model.gguf", "GGUF"), ("Models/other.gguf", "X"),
+                             ("Models/model.gguf.partial", "GG")] {
+            let url = direct.appendingPathComponent(path)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        func listing() -> [String] { (fm.enumerator(atPath: direct.path)?.allObjects as? [String] ?? []).sorted() }
+        let before = listing()
+        let support = dir.appendingPathComponent("Container/Super Notes", isDirectory: true)
+        let store = try makeStore(dir, "container")
+        _ = store.create(content: "already here")
+        @MainActor func run(_ from: URL, github: Set<String>? = ["fromgithub"]) throws -> DirectEditionImport.Summary {
+            try DirectEditionImport.importData(from: from, into: store, support: support, modelFileName: "model.gguf", githubExtensions: github)
+        }
+        let summary = try run(direct)
+        check(summary.notes == 2 && Set(texts(store.deck)) == ["groceries\n- milk", "math\n2+2", "already here"], "notes merged: \(summary)")
+        check(summary.extensions == ["mine"] && summary.skippedExtensions == ["fromgithub"], "own extensions copied, GitHub ones left: \(summary)")
+        check(summary.themes == ["Night.json"] && summary.models == ["model.gguf"], "themes and the model copied: \(summary)")
+        let models = support.appendingPathComponent("Models")
+        check(fm.fileExists(atPath: support.appendingPathComponent("Extensions/mine/extension.json").path)
+              && !fm.fileExists(atPath: support.appendingPathComponent("Extensions/fromgithub").path), "files land in the container")
+        check((try? fm.contentsOfDirectory(atPath: models.path))?.sorted() == ["model.gguf.partial"]
+              && (try? String(contentsOf: models.appendingPathComponent("model.gguf.partial"), encoding: .utf8)) == "GGUF",
+              "only the catalog model is copied, as a .partial for AIKit to verify")
+        check(listing() == before && source.deck.count == 2, "the direct edition's folder is untouched")
+        let again = try run(direct)
+        check(again.notes == 0 && again.extensions.isEmpty && again.themes.isEmpty, "a second import changes nothing: \(again)")
+        check((try? run(dir)) == nil, "a folder without notes is refused")
+        try? fm.removeItem(at: support.appendingPathComponent("Extensions/mine"))
+        let unknown = try run(direct, github: nil)
+        check(unknown.extensions.isEmpty && unknown.skippedExtensions == ["fromgithub", "mine"], "without the settings file no extension is copied")
+
+        // A linked database would stay a link in the copy and SQLite would write the source: refused.
+        let linked = dir.appendingPathComponent("Linked", isDirectory: true)
+        try fm.createDirectory(at: linked, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: linked.appendingPathComponent("notes.sqlite"), withDestinationURL: direct.appendingPathComponent("notes.sqlite"))
+        do { _ = try run(linked); check(false, "a linked notes.sqlite must be refused") }
+        catch { check("\(error)".contains("link"), "linked database refused: \(error)") }
+        check(listing() == before, "the link's target is untouched")
+
+        // A copy torn by a running direct edition recovers to nothing: an error, not "imported 0 notes".
+        let torn = dir.appendingPathComponent("Torn", isDirectory: true)
+        try fm.createDirectory(at: torn, withIntermediateDirectories: true)
+        try Data(repeating: 0x5A, count: 8192).write(to: torn.appendingPathComponent("notes.sqlite"))
+        do { _ = try run(torn); check(false, "a torn database must not import as 0 notes") }
+        catch { check("\(error)".contains("Quit the direct-download"), "torn copy explained: \(error)") }
+
+        let prefs = dir.appendingPathComponent("com.udsy.supernotes.plist")
+        NSDictionary(dictionary: ["pomodoroWorkMinutes": 19, "syncNotes": true, "unrelated": "x"]).write(to: prefs, atomically: true)
+        let sources = try JSONEncoder().encode(["fromgithub": "https://github.com/o/r"])
+        NSDictionary(dictionary: ["extensions.sources": sources]).write(to: dir.appendingPathComponent("gh.plist"), atomically: true)
+        check(DirectEditionImport.githubExtensions(inPreferences: dir.appendingPathComponent("gh.plist")) == ["fromgithub"],
+              "GitHub-installed extensions read from the direct edition's settings")
+        let imported = try DirectEditionImport.importPreferences(from: prefs)
+        check(imported == 1 && Defaults[.pomodoroWorkMinutes] == 19
+              && !Defaults.store.bool(forKey: "syncNotes"), "only shareable settings are imported")
+    }
 
     storageCase("ordering") { dir in
         let s = try makeStore(dir)

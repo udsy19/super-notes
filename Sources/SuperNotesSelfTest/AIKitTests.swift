@@ -16,8 +16,13 @@ func registerAIKitTests() {
         check(pick(nil, apple: false) == .onDevice && pick(nil, apple: true) == .apple, "nothing picked: Apple's model where present, else the download")
         check(pick(.onDevice, apple: true) == .onDevice, "the downloaded model when picked")
         check(pick(.apple, apple: false) == .onDevice && pick(.apple, apple: true) == .apple, "Apple's model only where the Mac has it")
+        #if APP_STORE
+        check(pick(.commandLine, apple: true) == .apple && pick(.commandLine, apple: false) == .onDevice,
+              "the Store edition has no command-line engine: the choice falls back to the on-device engines")
+        #else
         check(pick(.commandLine, apple: true) == .commandLine && pick(.commandLine, apple: false, tool: false) == .commandLine,
               "a picked command-line tool is used even before one is found (readiness explains)")
+        #endif
         check(EngineSelection.shouldDownload(engine: .onDevice, autoDownload: true, installed: false), "download for the on-device engine")
         check(!EngineSelection.shouldDownload(engine: .onDevice, autoDownload: false, installed: false), "not when turned off")
         check(!EngineSelection.shouldDownload(engine: .onDevice, autoDownload: true, installed: true), "not when installed")
@@ -54,7 +59,9 @@ func registerAIKitTests() {
 
     SelfTest.cases.append(("AIKit.downloadManager", { MainActor.assumeIsolated { downloadManagerTests() } }))
     SelfTest.cases.append(("AIKit.jsBridge", { MainActor.assumeIsolated { jsBridgeTests() } }))
+    #if !APP_STORE
     SelfTest.cases.append(("AIKit.commandLineEngine", { MainActor.assumeIsolated { commandLineTests() } }))
+    #endif
     SelfTest.cases.append(("AIKit.llamaSmoke", { MainActor.assumeIsolated { llamaSmokeTest() } }))
 }
 
@@ -217,6 +224,37 @@ private func downloadManagerTests() {
     else { check(false, "size mismatch fails: \(o.state)") }
     o.stop()
 
+    // Download Now is the user's consent: Low Power Mode and a metered network don't hold it; a short disk still does.
+    let asked = ModelDownloader(spec: spec, folder: scratch("asked"), configuration: config, conditions: { current })
+    current = DownloadConditions(networkOK: false, lowPowerMode: true, freeDiskBytes: 50_000_000_000)
+    asked.start()
+    check(asked.state == .waiting(.lowPower), "automatic download waits in Low Power Mode: \(asked.state)")
+    asked.stop()
+    asked.retryNow(userRequested: true)
+    pump(until: { asked.state == .installed })
+    check(asked.state == .installed, "Download Now runs in Low Power Mode on a metered network: \(asked.state)")
+    asked.remove()
+    current = DownloadConditions(networkOK: false, lowPowerMode: true, freeDiskBytes: 1_000)
+    asked.retryNow(userRequested: true)
+    check(asked.state == .waiting(.disk), "Download Now still waits for disk space: \(asked.state)")
+    asked.stop()
+    current = DownloadConditions(networkOK: true, lowPowerMode: false, freeDiskBytes: 50_000_000_000)
+
+    // A model copied in by Import (as `.partial`) is installed only when its SHA-256 matches; a tampered one is deleted.
+    let imported = ModelDownloader(spec: spec, folder: scratch("imported"), configuration: config, conditions: { current })
+    var tampered = payload; tampered[0] ^= 0xFF
+    try? FileManager.default.createDirectory(at: imported.folder, withIntermediateDirectories: true)
+    try? tampered.write(to: imported.partialURL)
+    FakeModelServer.ranges = []
+    imported.adoptImported()
+    pump(until: { imported.state == .notInstalled && !FileManager.default.fileExists(atPath: imported.partialURL.path) })
+    check(imported.state == .notInstalled && !imported.isInstalled && !FileManager.default.fileExists(atPath: imported.partialURL.path),
+          "a tampered imported GGUF is rejected and deleted: \(imported.state)")
+    try? payload.write(to: imported.partialURL)
+    imported.adoptImported()
+    pump(until: { imported.state == .installed })
+    check(imported.isInstalled && FakeModelServer.ranges.isEmpty, "a matching imported GGUF is installed without the network")
+
     // "Getting ready… 40%" from the state.
     check(ModelDownloader.State.downloading(received: 40, total: 100).preparingText == "Getting ready… 40%", "progress pill")
     check(ModelDownloader.State.installed.preparingText == nil, "no pill when installed")
@@ -339,6 +377,7 @@ private func jsBridgeTests() {
 
 // MARK: - Command-line engine over fake executables
 
+#if !APP_STORE
 @MainActor
 private func commandLineTests() {
     let bin = scratch("bin")
@@ -413,6 +452,7 @@ private func commandLineTests() {
     if case .unavailable(let reason) = service.readiness { check(reason.contains("Try again when the download finishes"), "blocked download: \(reason)") }
     else { check(false, "a blocked download isn't ready: \(service.readiness)") }
 }
+#endif
 
 // MARK: - The real model, when a GGUF is at hand
 
